@@ -703,6 +703,7 @@ void Parser::ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs) {
                    AttributeList::AS_Keyword);
       break;
     }
+	
     default:
       return;
     }
@@ -3137,7 +3138,15 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw__Null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
       continue;
-
+	case tok::kw_sgx_private: {
+		auto &attrs = DS.getAttributes();
+		IdentifierInfo *AttrName = Tok.getIdentifierInfo();
+		printf("attr created as = %s\n", AttrName->getName().str().c_str());
+		SourceLocation AttrNameLoc = ConsumeToken();
+		attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
+			AttributeList::AS_Keyword);
+		continue;
+	}
     // Objective-C 'kindof' types.
     case tok::kw___kindof:
       DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,
@@ -4442,6 +4451,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw___unaligned:
 
   case tok::kw__Nonnull:
+  case tok::kw_sgx_private:
   case tok::kw__Nullable:
   case tok::kw__Null_unspecified:
 
@@ -4629,6 +4639,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw___unaligned:
 
   case tok::kw__Nonnull:
+  case tok::kw_sgx_private:
   case tok::kw__Nullable:
   case tok::kw__Null_unspecified:
 
@@ -4875,7 +4886,15 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
     case tok::kw__Null_unspecified:
       ParseNullabilityTypeSpecifiers(DS.getAttributes());
       continue;
-
+	case tok::kw_sgx_private: {
+		auto &attrs = DS.getAttributes();
+		IdentifierInfo *AttrName = Tok.getIdentifierInfo();
+		printf("attr created as = %s\n", AttrName->getName().str().c_str());
+		SourceLocation AttrNameLoc = ConsumeToken();
+		attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
+			AttributeList::AS_Keyword);
+		continue;
+	}
     // Objective-C 'kindof' types.
     case tok::kw___kindof:
       DS.getAttributes().addNew(Tok.getIdentifierInfo(), Loc, nullptr, Loc,

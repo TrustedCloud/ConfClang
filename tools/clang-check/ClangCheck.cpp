@@ -149,6 +149,7 @@ public:
 
 } // namespace
 
+
 int main(int argc, const char **argv) {
   llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
 
@@ -183,4 +184,5 @@ int main(int argc, const char **argv) {
     FrontendFactory = newFrontendActionFactory(&CheckFactory);
 
   return Tool.run(FrontendFactory.get());
+
 }

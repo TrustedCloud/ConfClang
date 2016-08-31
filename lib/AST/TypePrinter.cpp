@@ -1187,7 +1187,10 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
     }
     spaceBeforePlaceHolder(OS);
   }
-
+  if (T->getAttrKind() == AttributedType::attr_sgx_private) {
+	  OS << " sgx_private";
+	  spaceBeforePlaceHolder(OS);
+  }
   // Print nullability type specifiers.
   if (T->getAttrKind() == AttributedType::attr_nonnull ||
       T->getAttrKind() == AttributedType::attr_nullable ||
@@ -1249,6 +1252,12 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
 
     return;
   }
+
+  if (T->getAttrKind() == AttributedType::attr_sgx_private) {
+	  //OS << " sgx_private";
+	  return;
+  }
+	 
 
   OS << " __attribute__((";
   switch (T->getAttrKind()) {

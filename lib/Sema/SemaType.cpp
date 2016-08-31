@@ -653,6 +653,8 @@ static void distributeTypeAttrsFromDeclarator(TypeProcessingState &state,
     NULLABILITY_TYPE_ATTRS_CASELIST:
       // Nullability specifiers cannot go after the declarator-id.
 
+	case AttributeList::AT_TypeSgxPrivate:
+
     // Objective-C __kindof does not get distributed.
     case AttributeList::AT_ObjCKindOf:
       continue;
@@ -3232,6 +3234,7 @@ IdentifierInfo *Sema::getNullabilityKeyword(NullabilityKind nullability) {
       Ident__Null_unspecified = PP.getIdentifierInfo("_Null_unspecified");
     return Ident__Null_unspecified;
   }
+
   llvm_unreachable("Unknown nullability kind.");
 }
 
@@ -4773,6 +4776,8 @@ static AttributeList::Kind getAttrListKind(AttributedType::Kind kind) {
     return AttributeList::AT_TypeNullUnspecified;
   case AttributedType::attr_objc_kindof:
     return AttributeList::AT_ObjCKindOf;
+  case AttributedType::attr_sgx_private:
+	return AttributeList::AT_TypeSgxPrivate;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -5742,6 +5747,16 @@ namespace {
   };
 } // end anonymous namespace
 
+
+static bool handleSgxAttr(TypeProcessingState &State,
+	AttributeList &Attr,
+	QualType &Type) {
+	Sema &S = State.getSema();
+
+	Type = S.Context.getAttributedType(AttributedType::attr_sgx_private, Type, Type);
+	return false;
+}
+
 static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
                                              AttributeList &Attr,
                                              QualType &Type) {
@@ -6631,6 +6646,10 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
         attr.setUsedAsTypeAttr();
       break;
 
+	case AttributeList::AT_TypeSgxPrivate:
+		handleSgxAttr(state, attr, type);
+		attr.setUsedAsTypeAttr();
+		break;
 
     NULLABILITY_TYPE_ATTRS_CASELIST:
       // Either add nullability here or try to distribute it.  We

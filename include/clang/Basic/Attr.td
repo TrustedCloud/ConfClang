@@ -1125,6 +1125,10 @@ def TypeNullUnspecified : TypeAttr {
   let Documentation = [TypeNullUnspecifiedDocs];
 }
 
+def TypeSgxPrivate : TypeAttr {
+	let Spellings = [Keyword<"sgx_private">];
+	let Documentation = [Undocumented];
+}
 def ObjCKindOf : TypeAttr {
   let Spellings = [Keyword<"__kindof">];
   let Documentation = [Undocumented];
