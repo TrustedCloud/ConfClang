@@ -6,6 +6,7 @@ add_clang_subdirectory(clang-format)
 add_clang_subdirectory(clang-format-vs)
 add_clang_subdirectory(clang-fuzzer)
 add_clang_subdirectory(dummy-pass)
+add_clang_subdirectory(signature-dump)
 
 add_clang_subdirectory(c-index-test)
 

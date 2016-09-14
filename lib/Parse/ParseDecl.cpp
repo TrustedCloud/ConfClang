@@ -3141,7 +3141,6 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
 	case tok::kw_sgx_private: {
 		auto &attrs = DS.getAttributes();
 		IdentifierInfo *AttrName = Tok.getIdentifierInfo();
-		printf("attr created as = %s\n", AttrName->getName().str().c_str());
 		SourceLocation AttrNameLoc = ConsumeToken();
 		attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
 			AttributeList::AS_Keyword);
@@ -4889,7 +4888,6 @@ void Parser::ParseTypeQualifierListOpt(DeclSpec &DS, unsigned AttrReqs,
 	case tok::kw_sgx_private: {
 		auto &attrs = DS.getAttributes();
 		IdentifierInfo *AttrName = Tok.getIdentifierInfo();
-		printf("attr created as = %s\n", AttrName->getName().str().c_str());
 		SourceLocation AttrNameLoc = ConsumeToken();
 		attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
 			AttributeList::AS_Keyword);
