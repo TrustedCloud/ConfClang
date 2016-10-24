@@ -47,6 +47,8 @@ CodeGenTypes::~CodeGenTypes() {
 void CodeGenTypes::addRecordTypeName(const RecordDecl *RD,
                                      llvm::StructType *Ty,
                                      StringRef suffix) {
+
+	
   SmallString<256> TypeName;
   llvm::raw_svector_ostream OS(TypeName);
   OS << RD->getKindName() << '.';
@@ -661,7 +663,6 @@ llvm::StructType *CodeGenTypes::ConvertRecordDeclType(const RecordDecl *RD) {
   const Type *Key = Context.getTagDeclType(RD).getTypePtr();
 
   llvm::StructType *&Entry = RecordDeclTypes[Key];
-
   // If we don't have a StructType at all yet, create the forward declaration.
   if (!Entry) {
     Entry = llvm::StructType::create(getLLVMContext());

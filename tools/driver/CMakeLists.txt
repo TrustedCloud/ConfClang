@@ -9,6 +9,7 @@ set( LLVM_LINK_COMPONENTS
   MC
   MCParser
   ObjCARCOpts
+  AnnotationsInference
   Option
   ScalarOpts
   Support

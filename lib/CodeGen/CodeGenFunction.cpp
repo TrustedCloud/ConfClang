@@ -649,6 +649,83 @@ static bool endsWithReturn(const Decl* F) {
   }
   return false;
 }
+bool isSgxPrivate(QualType ty) {
+	if (const AttributedType *AT = dyn_cast<AttributedType>(ty.getTypePtr())) {
+		if (AT->getAttrKind() == AttributedType::attr_sgx_private) {
+			return true;
+		}
+		else {
+			isSgxPrivate(AT->desugar());
+		}
+	}
+	else if (const TypedefType *TD = dyn_cast<TypedefType>(ty.getTypePtr())) {
+		return isSgxPrivate(TD->desugar());
+	}
+	return false;
+}
+
+void addMetaDataToFunctionDeclaration(const Decl *D, llvm::Function *Fn, const CGFunctionInfo &FnInfo) {
+	if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+		llvm::Metadata* md_public = llvm::MDString::get(Fn->getContext(), "public");
+		llvm::Metadata* md_private = llvm::MDString::get(Fn->getContext(), "private");
+		std::vector<llvm::Metadata*> arg_metadata;
+		CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
+		for (FunctionDecl::param_const_iterator p = FD->param_begin(); p != FD->param_end(); p++) {
+			if ((*p)->getType()->isStructureType()) {
+				if (Ai->info.isIndirect()) {
+					std::vector<llvm::Metadata*> md_array;
+					md_array.push_back(md_public);
+					QualType ty = (*p)->getType();
+					md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+					llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+					arg_metadata.push_back(md_node);
+				}
+				else if (Ai->info.isExpand()) {
+					bool struct_type = isSgxPrivate((*p)->getType());
+					RecordDecl *RD = (*p)->getType()->getAsStructureType()->getDecl();
+					for (RecordDecl::field_iterator Fi = RD->field_begin(); Fi != RD->field_end(); Fi++) {
+						std::vector<llvm::Metadata*> md_array;
+						md_array.push_back(struct_type ? md_private : md_public);
+						QualType ty = (*Fi)->getType();
+						if (ty->isPointerType()) {
+							ty = ty->getPointeeType();
+							while (ty->isPointerType()) {
+								md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+								ty = ty->getPointeeType();
+							}
+							md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+						}
+						llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+						arg_metadata.push_back(md_node);
+					}
+				}
+			}
+			else {
+				std::vector<llvm::Metadata*> md_array;
+				QualType ty = (*p)->getType();
+				while (ty->isPointerType()) {
+					md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+					ty = ty->getPointeeType();
+				}
+				md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+				llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+				arg_metadata.push_back(md_node);
+			}
+			Ai++;
+		}
+		llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(arg_metadata));
+		Fn->setMetadata("sgx_type", md_node);
+		std::vector<llvm::Metadata*> md_array;
+		QualType ty = FD->getReturnType();
+		while (ty->isPointerType()) {
+			md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+			ty = ty->getPointeeType();
+		}
+		md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+		md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+		Fn->setMetadata("sgx_return_type", md_node);
+	}
+}
 
 void CodeGenFunction::StartFunction(GlobalDecl GD,
                                     QualType RetTy,
@@ -657,9 +734,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
                                     const FunctionArgList &Args,
                                     SourceLocation Loc,
                                     SourceLocation StartLoc) {
+
   assert(!CurFn &&
          "Do not use a CodeGenFunction object for more than one function");
-
   const Decl *D = GD.getDecl();
 
   DidCallStackSave = false;
@@ -706,11 +783,18 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     }
   }
 
+  
+  
+  addMetaDataToFunctionDeclaration(D, Fn, FnInfo);
+
+
+
   // Pass inline keyword to optimizer if it appears explicitly on any
   // declaration. Also, in the case of -fno-inline attach NoInline
   // attribute to all functions that are not marked AlwaysInline, or
   // to all functions that are not marked inline or implicitly inline
   // in the case of -finline-hint-functions.
+  
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     const CodeGenOptions& CodeGenOpts = CGM.getCodeGenOpts();
     if (!CodeGenOpts.NoInline) {

@@ -351,7 +351,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
 
   return GV;
 }
-
+bool isSgxPrivate(QualType ty);
 void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
                                       llvm::GlobalValue::LinkageTypes Linkage) {
   // Check to see if we already have a global variable for this
@@ -375,6 +375,24 @@ void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
 
   llvm::GlobalVariable *var =
     cast<llvm::GlobalVariable>(addr->stripPointerCasts());
+  
+  std::vector<llvm::Metadata*> MDs;
+  MDs.push_back(llvm::MDString::get(CGM.getModule().getContext(), "public"));
+
+  QualType ty = D.getType();
+  while (1) {
+	  if (isSgxPrivate(ty))
+		  MDs.push_back(llvm::MDString::get(CGM.getModule().getContext(), "private"));
+	  else
+		  MDs.push_back(llvm::MDString::get(CGM.getModule().getContext(), "public"));
+	  if (!ty->isPointerType())
+		  break;
+	  ty = ty->getPointeeType();
+  }
+
+
+
+ var->setMetadata("sgx_type", llvm::MDNode::get(CGM.getModule().getContext(), MDs));
 
   // CUDA's local and local static __shared__ variables should not
   // have any non-empty initializers. This is ensured by Sema.

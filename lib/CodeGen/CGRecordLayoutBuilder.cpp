@@ -682,8 +682,12 @@ CGBitFieldInfo CGBitFieldInfo::MakeInfo(CodeGenTypes &Types,
   return CGBitFieldInfo(Offset, Size, IsSigned, StorageSize, StorageOffset);
 }
 
+bool isSgxPrivate(QualType ty);
+
 CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
                                                   llvm::StructType *Ty) {
+
+	
   CGRecordLowering Builder(*this, D, /*Packed=*/false);
 
   Builder.lower(/*NonVirtualBaseType=*/false);
@@ -709,7 +713,6 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
   // signifies that the type is no longer opaque and record layout is complete,
   // but we may need to recursively layout D while laying D out as a base type.
   Ty->setBody(Builder.FieldTypes, Builder.Packed);
-
   CGRecordLayout *RL =
     new CGRecordLayout(Ty, BaseTy, Builder.IsZeroInitializable,
                         Builder.IsZeroInitializableAsBase);
@@ -808,7 +811,28 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
            "Bitfield outside of its allocated storage");
   }
 #endif
+  llvm::NamedMDNode *StructMetadata = TheModule.getOrInsertNamedMetadata("struct_sgx_type");
+  std::vector<llvm::Metadata*> struct_md;
+  for (RecordDecl::field_iterator Fi = D->field_begin(); Fi != D->field_end(); Fi++) {
+	  FieldDecl *F = *Fi;
+	  QualType ty = F->getType();
+	  std::vector<llvm::Metadata*> field_md;
+	  if (ty->isPointerType()) {
+		  do {
+			  ty = ty->getPointeeType();
+			  std::string type = isSgxPrivate(ty) ? "private" : "public";
+			  field_md.push_back(llvm::MDString::get(TheModule.getContext(), type));
+		  } while (ty->isPointerType());
+	  }
+	  llvm::MDNode *fd_md = llvm::MDNode::get(TheModule.getContext(), field_md);
+	  struct_md.push_back(fd_md);
+  }
 
+  std::vector<llvm::Metadata*> record_md;
+  record_md.push_back(llvm::MDString::get(TheModule.getContext(), Ty->getName().str()));
+  record_md.push_back(llvm::MDNode::get(TheModule.getContext(), struct_md));
+
+  StructMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), record_md));
   return RL;
 }
 

@@ -1464,7 +1464,6 @@ llvm::FunctionType *CodeGenTypes::GetFunctionType(GlobalDecl GD) {
 
 llvm::FunctionType *
 CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
-
   bool Inserted = FunctionsBeingProcessed.insert(&FI).second;
   (void)Inserted;
   assert(Inserted && "Recursively being processed?");
@@ -1527,7 +1526,6 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
                                      ie = it + FI.getNumRequiredArgs();
   for (; it != ie; ++it, ++ArgNo) {
     const ABIArgInfo &ArgInfo = it->info;
-
     // Insert a padding type to ensure proper alignment.
     if (IRFunctionArgs.hasPaddingArg(ArgNo))
       ArgTypes[IRFunctionArgs.getPaddingArgNo(ArgNo)] =

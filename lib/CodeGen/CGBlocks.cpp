@@ -1187,8 +1187,8 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
   StringRef name = CGM.getBlockMangledName(GD, blockDecl);
   llvm::Function *fn = llvm::Function::Create(
       fnLLVMType, llvm::GlobalValue::InternalLinkage, name, &CGM.getModule());
-  CGM.SetInternalFunctionAttributes(blockDecl, fn, fnInfo);
 
+  CGM.SetInternalFunctionAttributes(blockDecl, fn, fnInfo);
   // Begin generating the function.
   StartFunction(blockDecl, fnType->getReturnType(), fn, fnInfo, args,
                 blockDecl->getLocation(),

@@ -996,6 +996,8 @@ static void setLinkageAndVisibilityForGV(llvm::GlobalValue *GV,
   }
 }
 
+
+
 void CodeGenModule::CreateFunctionTypeMetadata(const FunctionDecl *FD,
                                                llvm::Function *F) {
   // Only if we are checking indirect calls.
@@ -1025,6 +1027,7 @@ void CodeGenModule::CreateFunctionTypeMetadata(const FunctionDecl *FD,
   if (CodeGenOpts.SanitizeCfiCrossDso)
     if (auto CrossDsoTypeId = CreateCrossDsoCfiTypeId(MD))
       F->addTypeMetadata(0, llvm::ConstantAsMetadata::get(CrossDsoTypeId));
+  
 }
 
 void CodeGenModule::SetFunctionAttributes(GlobalDecl GD, llvm::Function *F,
@@ -1798,6 +1801,7 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
     }
 
     return EmitGlobalFunctionDefinition(GD, GV);
+	
   }
 
   if (const auto *VD = dyn_cast<VarDecl>(D))
@@ -2380,7 +2384,7 @@ void CodeGenModule::maybeSetTrivialComdat(const Decl &D,
     return;
   GO.setComdat(TheModule.getOrInsertComdat(GO.getName()));
 }
-
+bool isSgxPrivate(QualType ty);
 /// Pass IsTentative as true if you want to create a tentative definition.
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
                                             bool IsTentative) {
@@ -2572,7 +2576,24 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   if (Linkage == llvm::GlobalVariable::CommonLinkage)
     // common vars aren't constant even if declared const.
     GV->setConstant(false);
+  std::vector<llvm::Metadata*> MDs;
+  MDs.push_back(llvm::MDString::get(TheModule.getContext(), "public"));
+  
+  QualType ty = D->getType();
+  while (1) {
+	  if (isSgxPrivate(ty))
+		  MDs.push_back(llvm::MDString::get(TheModule.getContext(), "private"));
+	  else
+		  MDs.push_back(llvm::MDString::get(TheModule.getContext(), "public"));
+	  if (!ty->isPointerType())
+		  break;
+	  ty = ty->getPointeeType();
+  }
+  
+  
 
+  GV->setMetadata("sgx_type", llvm::MDNode::get(TheModule.getContext(), MDs));
+  
   setNonAliasAttributes(D, GV);
 
   if (D->getTLSKind() && !GV->isThreadLocal()) {
