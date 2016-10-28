@@ -1521,7 +1521,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
 
   return ConstantAddress(Aliasee, Alignment);
 }
-
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   const auto *Global = cast<ValueDecl>(GD.getDecl());
 
@@ -1578,8 +1578,20 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   if (const auto *FD = dyn_cast<FunctionDecl>(Global)) {
     // Forward declarations are emitted lazily on first use.
     if (!FD->doesThisDeclarationHaveABody()) {
-      if (!FD->doesDeclarationForceExternallyVisibleDefinition())
-        return;
+		if (!FD->doesDeclarationForceExternallyVisibleDefinition()) {
+			llvm::errs() << FD->getName().str() << "\n";
+			const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
+			std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
+			llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
+
+			std::vector<llvm::Metadata*> func_md;
+			func_md.push_back(llvm::MDString::get(TheModule.getContext(), FD->getName().str()));
+			func_md.push_back(mds.first);
+			func_md.push_back(mds.second);
+			FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
+			return;
+		}
+        
 
       StringRef MangledName = getMangledName(GD);
 
@@ -1771,8 +1783,8 @@ void CodeGenModule::CompleteDIClassType(const CXXMethodDecl* D) {
 }
 
 void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
-  const auto *D = cast<ValueDecl>(GD.getDecl());
 
+  const auto *D = cast<ValueDecl>(GD.getDecl());
   PrettyStackTraceDecl CrashInfo(const_cast<ValueDecl *>(D), D->getLocation(), 
                                  Context.getSourceManager(),
                                  "Generating code for declaration");
@@ -2891,8 +2903,9 @@ void CodeGenModule::HandleCXXStaticMemberVarInstantiation(VarDecl *VD) {
 
 void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
                                                  llvm::GlobalValue *GV) {
-  const auto *D = cast<FunctionDecl>(GD.getDecl());
 
+  
+  const auto *D = cast<FunctionDecl>(GD.getDecl());
   // Compute the function info and LLVM type.
   const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
   llvm::FunctionType *Ty = getTypes().GetFunctionType(FI);

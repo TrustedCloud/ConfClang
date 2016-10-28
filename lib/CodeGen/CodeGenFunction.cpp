@@ -664,66 +664,73 @@ bool isSgxPrivate(QualType ty) {
 	return false;
 }
 
-void addMetaDataToFunctionDeclaration(const Decl *D, llvm::Function *Fn, const CGFunctionInfo &FnInfo) {
-	if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
-		llvm::Metadata* md_public = llvm::MDString::get(Fn->getContext(), "public");
-		llvm::Metadata* md_private = llvm::MDString::get(Fn->getContext(), "private");
-		std::vector<llvm::Metadata*> arg_metadata;
-		CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
-		for (FunctionDecl::param_const_iterator p = FD->param_begin(); p != FD->param_end(); p++) {
-			if ((*p)->getType()->isStructureType()) {
-				if (Ai->info.isIndirect()) {
-					std::vector<llvm::Metadata*> md_array;
-					md_array.push_back(md_public);
-					QualType ty = (*p)->getType();
-					md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-					llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
-					arg_metadata.push_back(md_node);
-				}
-				else if (Ai->info.isExpand()) {
-					bool struct_type = isSgxPrivate((*p)->getType());
-					RecordDecl *RD = (*p)->getType()->getAsStructureType()->getDecl();
-					for (RecordDecl::field_iterator Fi = RD->field_begin(); Fi != RD->field_end(); Fi++) {
-						std::vector<llvm::Metadata*> md_array;
-						md_array.push_back(struct_type ? md_private : md_public);
-						QualType ty = (*Fi)->getType();
-						if (ty->isPointerType()) {
-							ty = ty->getPointeeType();
-							while (ty->isPointerType()) {
-								md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-								ty = ty->getPointeeType();
-							}
-							md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-						}
-						llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
-						arg_metadata.push_back(md_node);
-					}
-				}
-			}
-			else {
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context) {
+	llvm::Metadata* md_public = llvm::MDString::get(context, "public");
+	llvm::Metadata* md_private = llvm::MDString::get(context, "private");
+	std::vector<llvm::Metadata*> arg_metadata;
+	CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
+	for (FunctionDecl::param_const_iterator p = FD->param_begin(); p != FD->param_end(); p++) {
+		if ((*p)->getType()->isStructureType()) {
+			if (Ai->info.isIndirect()) {
 				std::vector<llvm::Metadata*> md_array;
+				md_array.push_back(md_public);
 				QualType ty = (*p)->getType();
-				while (ty->isPointerType()) {
-					md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-					ty = ty->getPointeeType();
-				}
 				md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-				llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
 				arg_metadata.push_back(md_node);
 			}
-			Ai++;
+			else if (Ai->info.isExpand()) {
+				bool struct_type = isSgxPrivate((*p)->getType());
+				RecordDecl *RD = (*p)->getType()->getAsStructureType()->getDecl();
+				for (RecordDecl::field_iterator Fi = RD->field_begin(); Fi != RD->field_end(); Fi++) {
+					std::vector<llvm::Metadata*> md_array;
+					md_array.push_back(struct_type ? md_private : md_public);
+					QualType ty = (*Fi)->getType();
+					if (ty->isPointerType()) {
+						ty = ty->getPointeeType();
+						while (ty->isPointerType()) {
+							md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+							ty = ty->getPointeeType();
+						}
+						md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+					}
+					llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+					arg_metadata.push_back(md_node);
+				}
+			}
 		}
-		llvm::MDNode *md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(arg_metadata));
-		Fn->setMetadata("sgx_type", md_node);
-		std::vector<llvm::Metadata*> md_array;
-		QualType ty = FD->getReturnType();
-		while (ty->isPointerType()) {
+		else {
+			std::vector<llvm::Metadata*> md_array;
+			QualType ty = (*p)->getType();
+			while (ty->isPointerType()) {
+				md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+				ty = ty->getPointeeType();
+			}
 			md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-			ty = ty->getPointeeType();
+			llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+			arg_metadata.push_back(md_node);
 		}
+		Ai++;
+	}
+	llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(arg_metadata));
+
+	std::vector<llvm::Metadata*> md_array;
+	QualType ty = FD->getReturnType();
+	while (ty->isPointerType()) {
 		md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-		md_node = llvm::MDNode::get(Fn->getContext(), ArrayRef<llvm::Metadata*>(md_array));
-		Fn->setMetadata("sgx_return_type", md_node);
+		ty = ty->getPointeeType();
+	}
+	md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+	llvm::MDNode * md_node2 = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+	return std::pair<llvm::MDNode*, llvm::MDNode*>(md_node, md_node2);
+}
+
+
+void addMetaDataToFunctionDeclaration(const Decl *D, llvm::Function *Fn, const CGFunctionInfo &FnInfo) {
+	if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+		std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FnInfo, Fn->getContext());
+		Fn->setMetadata("sgx_type", mds.first);
+		Fn->setMetadata("sgx_return_type",mds.second);
 	}
 }
 
@@ -1080,6 +1087,7 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
 
 void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
                                    const CGFunctionInfo &FnInfo) {
+
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
   CurGD = GD;
 

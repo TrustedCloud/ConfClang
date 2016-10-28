@@ -48,7 +48,6 @@ void CodeGenFunction::EmitStopPoint(const Stmt *S) {
 void CodeGenFunction::EmitStmt(const Stmt *S) {
   assert(S && "Null statement?");
   PGO.setCurrentStmt(S);
-
   // These statements have their own debug info handling.
   if (EmitSimpleStmt(S))
     return;
