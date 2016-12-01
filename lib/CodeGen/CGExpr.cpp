@@ -3992,7 +3992,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
   // function type or a block pointer type.
   assert(CalleeType->isFunctionPointerType() &&
          "Call must have function pointer type!");
-
+ // CalleeType.dump();
   // Preserve the non-canonical function type because things like exception
   // specifications disappear in the canonical type. That information is useful
   // to drive the generation of more accurate code for this call later on.
@@ -4001,7 +4001,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, llvm::Value *Callee,
                                                  ->getAs<FunctionProtoType>();
 
   const Decl *TargetDecl = CalleeInfo.getCalleeDecl();
-
+ // TargetDecl->dump();
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl))
     // We can only guarantee that a function is called from the correct
     // context/function based on the appropriate target attributes,

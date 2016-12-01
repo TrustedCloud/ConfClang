@@ -1579,7 +1579,7 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     // Forward declarations are emitted lazily on first use.
     if (!FD->doesThisDeclarationHaveABody()) {
 		if (!FD->doesDeclarationForceExternallyVisibleDefinition()) {
-			llvm::errs() << FD->getName().str() << "\n";
+			//llvm::errs() << FD->getName().str() << "\n";
 			const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
 			std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
 			llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
