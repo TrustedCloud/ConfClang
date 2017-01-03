@@ -1341,7 +1341,7 @@ bool CodeGenFunction::ShouldNullCheckClassCastValue(const CastExpr *CE) {
 
   return true;
 }
-
+bool isSgxPrivate(QualType ty);
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
@@ -1390,8 +1390,32 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
                                       CodeGenFunction::CFITCK_UnrelatedCast,
                                       CE->getLocStart());
     }
+	Value* cast_value = Builder.CreateBitCast(Src, DstTy);
+	if (dyn_cast<llvm::Instruction>(cast_value)) {
+		llvm::Metadata* md_public = llvm::MDString::get(cast_value->getContext() , "public");
+		llvm::Metadata* md_private = llvm::MDString::get(cast_value->getContext() , "private");
+		//llvm::errs() << "Generating instruction";
+		//cast_value->dump();
+		QualType ty = CE->getType();
 
-    return Builder.CreateBitCast(Src, DstTy);
+		std::vector<llvm::Metadata*> md_array;
+		while (ty->isPointerType()) {
+			md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+			ty = ty->getPointeeType();
+		}
+		md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+		llvm::MDNode *md_node = llvm::MDNode::get(cast_value->getContext(), ArrayRef<llvm::Metadata*>(md_array));
+		(dyn_cast<llvm::Instruction>(cast_value))->setMetadata("sgx_cast_type", md_node);
+
+	}
+	else {
+		
+		llvm::errs() << "Warning : Cast generated non instruction!\n";
+		//CE->dump();
+		//cast_value->dump();
+		//llvm_unreachable("Cast generated non expression!");
+	}
+	return cast_value;
   }
   case CK_AddressSpaceConversion: {
     Value *Src = Visit(const_cast<Expr*>(E));

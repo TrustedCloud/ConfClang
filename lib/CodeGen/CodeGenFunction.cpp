@@ -668,6 +668,29 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 	llvm::Metadata* md_public = llvm::MDString::get(context, "public");
 	llvm::Metadata* md_private = llvm::MDString::get(context, "private");
 	std::vector<llvm::Metadata*> arg_metadata;
+	//return_type->dump();
+	
+	const ABIArgInfo &RAi = FnInfo.getReturnInfo();
+	//RAi.dump();
+	std::vector<llvm::Metadata*> md_array;
+	if (RAi.isIndirect()) {
+		md_array.push_back(md_public);
+	}
+	QualType ty = return_type;
+	while (ty->isPointerType()) {
+		md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+		ty = ty->getPointeeType();
+	}
+	md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+	llvm::MDNode * md_node2 = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+	
+
+	if (RAi.isIndirect()) {
+		arg_metadata.push_back(md_node2);
+		std::vector<llvm::Metadata*> md_array;
+		md_array.push_back(md_public);
+		md_node2 = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+	}
 	CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
 	for (QualType tyi : args_types) {
 		if (tyi->isStructureType()) {
@@ -713,15 +736,6 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 		Ai++;
 	}
 	llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(arg_metadata));
-
-	std::vector<llvm::Metadata*> md_array;
-	QualType ty = return_type;
-	while (ty->isPointerType()) {
-		md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-		ty = ty->getPointeeType();
-	}
-	md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
-	llvm::MDNode * md_node2 = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
 	return std::pair<llvm::MDNode*, llvm::MDNode*>(md_node, md_node2);
 }
 
