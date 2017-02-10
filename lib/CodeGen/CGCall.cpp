@@ -4002,8 +4002,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
   if(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
 	call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()),  CallInfo, Callee->getContext());
-  else if (dyn_cast<VarDecl>(CalleeInfo.getCalleeDecl()) && (dyn_cast<VarDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()) {
-	  const VarDecl *func_decl = dyn_cast<VarDecl>(CalleeInfo.getCalleeDecl());
+  else if (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
+	  const DeclaratorDecl *func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
 	  QualType func_ptr_type = func_decl->getType();
 	  //func_ptr_type->dump();
 	  assert(func_ptr_type->isPointerType() && "Dont know what type of call this is!");
@@ -4012,7 +4012,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 	  while (dyn_cast<ParenType>(func_type)) {
 		  func_type = dyn_cast<ParenType>(func_type)->getInnerType().getTypePtr();
 	  }
+	  while (dyn_cast<TypedefType>(func_type)) {
+		  func_type = dyn_cast<TypedefType>(func_type)->desugar().getTypePtr();
+	  }
+
 	  const FunctionProtoType *func_proto_type = dyn_cast<FunctionProtoType>(func_type);
+	  if (func_proto_type == NULL)
+		  func_type->dump();
 	  assert(func_proto_type);
 
 
@@ -4025,6 +4031,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 	  call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
   }
   else {
+	  CalleeInfo.getCalleeDecl()->dump();
 	  llvm_unreachable("Dont know what type of call this is!");
   }
   llvm::Instruction *CI = CS.getInstruction();

@@ -1410,7 +1410,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 	}
 	else {
 		
-		llvm::errs() << "Warning : Cast generated non instruction!\n";
+		//llvm::errs() << "Warning : Cast generated non instruction!\n";
 		//CE->dump();
 		//cast_value->dump();
 		//llvm_unreachable("Cast generated non expression!");
