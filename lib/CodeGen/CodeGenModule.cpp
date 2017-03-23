@@ -1578,8 +1578,12 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   if (const auto *FD = dyn_cast<FunctionDecl>(Global)) {
     // Forward declarations are emitted lazily on first use.
     if (!FD->doesThisDeclarationHaveABody()) {
+
+
 		if (!FD->doesDeclarationForceExternallyVisibleDefinition()) {
 			//llvm::errs() << FD->getName().str() << "\n";
+			// NOTE : DISABLING GENERATION OF FUNC SGX TYPE. REVERT AND FIX IF BREAKS SOMETHING
+			/*
 			const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
 			std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
 			llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
@@ -1589,6 +1593,9 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
 			func_md.push_back(mds.first);
 			func_md.push_back(mds.second);
 			FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
+
+			*/
+
 			return;
 		}
         
@@ -1783,7 +1790,7 @@ void CodeGenModule::CompleteDIClassType(const CXXMethodDecl* D) {
 }
 
 void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
-
+	
   const auto *D = cast<ValueDecl>(GD.getDecl());
   PrettyStackTraceDecl CrashInfo(const_cast<ValueDecl *>(D), D->getLocation(), 
                                  Context.getSourceManager(),
@@ -2851,7 +2858,8 @@ static void replaceUsesOfNonProtoConstant(llvm::Constant *old,
                                          callSite.getInstruction());
     }
     newArgs.clear(); // for the next iteration
-
+	newCall.getInstruction()->setMetadata("sgx_call_type", callSite.getInstruction()->getMetadata("sgx_call_type"));
+	newCall.getInstruction()->setMetadata("sgx_call_return_type", callSite.getInstruction()->getMetadata("sgx_call_return_type"));
     if (!newCall->getType()->isVoidTy())
       newCall->takeName(callSite.getInstruction());
     newCall.setAttributes(
@@ -2904,17 +2912,23 @@ void CodeGenModule::HandleCXXStaticMemberVarInstantiation(VarDecl *VD) {
 void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
                                                  llvm::GlobalValue *GV) {
 
-  
+	
+	
   const auto *D = cast<FunctionDecl>(GD.getDecl());
   // Compute the function info and LLVM type.
   const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
+  
   llvm::FunctionType *Ty = getTypes().GetFunctionType(FI);
+  
+
+ 
 
   // Get or create the prototype for the function.
   if (!GV || (GV->getType()->getElementType() != Ty))
     GV = cast<llvm::GlobalValue>(GetAddrOfFunction(GD, Ty, /*ForVTable=*/false,
                                                    /*DontDefer=*/true,
                                                    /*IsForDefinition=*/true));
+
 
   // Already emitted.
   if (!GV->isDeclaration())
@@ -2926,12 +2940,19 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
   // declarations).
   auto *Fn = cast<llvm::Function>(GV);
   setFunctionLinkage(GD, Fn);
+
+
+
   setFunctionDLLStorageClass(GD, Fn);
+
+
 
   // FIXME: this is redundant with part of setFunctionDefinitionAttributes
   setGlobalVisibility(Fn, D);
 
+
   MaybeHandleStaticInExternC(D, Fn);
+
 
   maybeSetTrivialComdat(*D, *Fn);
 

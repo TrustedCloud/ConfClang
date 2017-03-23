@@ -813,15 +813,21 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
 #endif
   llvm::NamedMDNode *StructMetadata = TheModule.getOrInsertNamedMetadata("struct_sgx_type");
   std::vector<llvm::Metadata*> struct_md;
+  unsigned last_index = -1;
   for (RecordDecl::field_iterator Fi = D->field_begin(); Fi != D->field_end(); Fi++) {
 	  FieldDecl *F = *Fi;
 	  QualType ty = F->getType();
 	  std::vector<llvm::Metadata*> field_md;
+	  unsigned FieldNo = RL->getLLVMFieldNo(F);
+	  if (FieldNo == last_index) {
+		  continue;
+	  }
+	  last_index = FieldNo;
 	  if (ty->isPointerType()) {
 		  do {
-			  ty = ty->getPointeeType();
-			  std::string type = isSgxPrivate(ty) ? "private" : "public";
-			  field_md.push_back(llvm::MDString::get(TheModule.getContext(), type));
+			    ty = ty->getPointeeType();
+			    std::string type = isSgxPrivate(ty) ? "private" : "public";
+				field_md.push_back(llvm::MDString::get(TheModule.getContext(), type));
 		  } while (ty->isPointerType());
 	  }
 	  llvm::MDNode *fd_md = llvm::MDNode::get(TheModule.getContext(), field_md);

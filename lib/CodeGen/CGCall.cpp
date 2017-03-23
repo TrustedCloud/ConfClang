@@ -3422,6 +3422,7 @@ CodeGenFunction::EmitRuntimeCall(llvm::Value *callee,
 /// Emits a call or invoke to the given noreturn runtime function.
 void CodeGenFunction::EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
                                                ArrayRef<llvm::Value*> args) {
+	llvm::errs() << "Generating No return function\n";
   SmallVector<llvm::OperandBundleDef, 1> BundleList;
   getBundlesForFunclet(callee, CurrentFuncletPad, BundleList);
 
@@ -3436,6 +3437,7 @@ void CodeGenFunction::EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
     invoke->setCallingConv(getRuntimeCC());
   } else {
     llvm::CallInst *call = Builder.CreateCall(callee, args, BundleList);
+	
     call->setDoesNotReturn();
     call->setCallingConv(getRuntimeCC());
     Builder.CreateUnreachable();
@@ -3504,6 +3506,36 @@ void CodeGenFunction::deferPlaceholderReplacement(llvm::Instruction *Old,
 
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
+std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo, CGCalleeInfo CalleeInfo, llvm::Value* Callee ) {
+	std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
+	if (CalleeInfo.getCalleeDecl() == NULL) {
+		Callee->dump();
+		CalleeInfo.getCalleeFunctionProtoType()->dump();
+	}
+	
+	//if (CalleeInfo.getCalleeDecl() != NULL && dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
+	//	call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
+	//else if (CalleeInfo.getCalleeDecl() == NULL || dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
+		const DeclaratorDecl *func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
+		
+		const FunctionProtoType *func_proto_type = CalleeInfo.getCalleeFunctionProtoType();
+		if (func_proto_type == NULL)
+			func_decl->dump();
+		assert(func_proto_type);
+		QualType return_type = func_proto_type->getReturnType();
+		std::vector<QualType> arg_types;
+		for (FunctionProtoType::param_type_iterator param_type = func_proto_type->param_type_begin(); param_type != func_proto_type->param_type_end(); param_type++) {
+			arg_types.push_back(*param_type);
+		}
+		call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
+	//}
+	//else {
+	//	CalleeInfo.getCalleeDecl()->dump();
+	//	llvm_unreachable("Dont know what type of call this is!");
+	//}
+	return call_mds;
+}
+
 RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                                  llvm::Value *Callee,
                                  ReturnValueSlot ReturnValue,
@@ -3512,7 +3544,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                                  llvm::Instruction **callOrInvoke) {
 
 
-  //llvm::errs() << "Emitting call\n";
   // FIXME: We no longer need the types from CallArgs; lift up and simplify.
 
   // Handle struct-return functions by passing a pointer to the
@@ -3871,6 +3902,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // with unprototyped functions.
   if (llvm::ConstantExpr *CE = dyn_cast<llvm::ConstantExpr>(Callee))
     if (llvm::Function *CalleeF = dyn_cast<llvm::Function>(CE->getOperand(0))) {
+
+
       llvm::PointerType *CurPT=cast<llvm::PointerType>(Callee->getType());
       llvm::FunctionType *CurFT =
         cast<llvm::FunctionType>(CurPT->getElementType());
@@ -3942,6 +3975,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                               BundleList);
     EmitBlock(Cont);
   }
+
+
   if (callOrInvoke)
     *callOrInvoke = CS.getInstruction();
 
@@ -3975,6 +4010,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // If the call doesn't return, finish the basic block and clear the
   // insertion point; this allows the rest of IRgen to discard
   // unreachable code.
+  
+
+  llvm::Instruction *CI = CS.getInstruction();
+  std::pair<llvm::MDNode*, llvm::MDNode*> call_mds = getCallMD(CallInfo, CalleeInfo, Callee);
+  CI->setMetadata("sgx_call_type", call_mds.first);
+  CI->setMetadata("sgx_call_return_type", call_mds.second);
+
   if (CS.doesNotReturn()) {
     if (UnusedReturnSize)
       EmitLifetimeEnd(llvm::ConstantInt::get(Int64Ty, UnusedReturnSize),
@@ -3999,44 +4041,12 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
 
  // std::pair<llvm::MDNode*, llvm::MDNode*> call_mds = getMetaDataForTypeVector(arg_types, CallInfo.getReturnType(), CallInfo, Callee->getContext());
-  std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
-  if(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
-	call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()),  CallInfo, Callee->getContext());
-  else if (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
-	  const DeclaratorDecl *func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
-	  QualType func_ptr_type = func_decl->getType();
-	  //func_ptr_type->dump();
-	  assert(func_ptr_type->isPointerType() && "Dont know what type of call this is!");
-	  //func_type = func_type->getPointeeType();
-	  const Type *func_type = func_ptr_type->getPointeeType().getTypePtr();
-	  while (dyn_cast<ParenType>(func_type)) {
-		  func_type = dyn_cast<ParenType>(func_type)->getInnerType().getTypePtr();
-	  }
-	  while (dyn_cast<TypedefType>(func_type)) {
-		  func_type = dyn_cast<TypedefType>(func_type)->desugar().getTypePtr();
-	  }
-
-	  const FunctionProtoType *func_proto_type = dyn_cast<FunctionProtoType>(func_type);
-	  if (func_proto_type == NULL)
-		  func_type->dump();
-	  assert(func_proto_type);
 
 
-	  QualType return_type = func_proto_type->getReturnType();
-	  //return_type.dump();
-	  std::vector<QualType> arg_types;
-	  for (FunctionProtoType::param_type_iterator param_type = func_proto_type->param_type_begin(); param_type!= func_proto_type->param_type_end(); param_type++) {
-	  	  arg_types.push_back(*param_type);
-	  }
-	  call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
-  }
-  else {
-	  CalleeInfo.getCalleeDecl()->dump();
-	  llvm_unreachable("Dont know what type of call this is!");
-  }
-  llvm::Instruction *CI = CS.getInstruction();
-  CI->setMetadata("sgx_call_type", call_mds.first);
-  CI->setMetadata("sgx_call_return_type", call_mds.second);
+  
+  
+
+
   if (!CI->getType()->isVoidTy())
     CI->setName("call");
 
@@ -4171,7 +4181,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                               OffsetValue);
     }
   }
-
   return Ret;
 }
 
