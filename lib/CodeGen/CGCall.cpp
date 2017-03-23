@@ -3508,16 +3508,25 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo, CGCalleeInfo CalleeInfo, llvm::Value* Callee ) {
 	std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
-	if (CalleeInfo.getCalleeDecl() == NULL) {
-		Callee->dump();
-		CalleeInfo.getCalleeFunctionProtoType()->dump();
-	}
+
 	
-	//if (CalleeInfo.getCalleeDecl() != NULL && dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
-	//	call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
-	//else if (CalleeInfo.getCalleeDecl() == NULL || dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
+
+	if (dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
+		call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
+	else if (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
 		const DeclaratorDecl *func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
-		
+		/*
+		QualType func_ptr_type = func_decl->getType();
+		assert(func_ptr_type->isPointerType() && "Dont know what type of call this is!");
+		const Type *func_type = func_ptr_type->getPointeeType().getTypePtr();
+		while (dyn_cast<ParenType>(func_type)) {
+			func_type = dyn_cast<ParenType>(func_type)->getInnerType().getTypePtr();
+		}
+		while (dyn_cast<TypedefType>(func_type)) {
+			func_type = dyn_cast<TypedefType>(func_type)->desugar().getTypePtr();
+		}
+		//const FunctionProtoType *func_proto_type = dyn_cast<FunctionProtoType>(func_type);
+		*/
 		const FunctionProtoType *func_proto_type = CalleeInfo.getCalleeFunctionProtoType();
 		if (func_proto_type == NULL)
 			func_decl->dump();
@@ -3528,11 +3537,11 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 			arg_types.push_back(*param_type);
 		}
 		call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
-	//}
-	//else {
-	//	CalleeInfo.getCalleeDecl()->dump();
-	//	llvm_unreachable("Dont know what type of call this is!");
-	//}
+	}
+	else {
+		CalleeInfo.getCalleeDecl()->dump();
+		llvm_unreachable("Dont know what type of call this is!");
+	}
 	return call_mds;
 }
 
