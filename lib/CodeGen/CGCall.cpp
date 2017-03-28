@@ -3506,31 +3506,64 @@ void CodeGenFunction::deferPlaceholderReplacement(llvm::Instruction *Old,
 
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
+
+
+
+
 std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo, CGCalleeInfo CalleeInfo, llvm::Value* Callee ) {
 	std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
 
+	if (CalleeInfo.getCalleeDecl() == NULL) {
+		if (CalleeInfo.getCalleeFunctionProtoType() == NULL) {
+			llvm::errs() << "No way ahead!\n";
+			llvm_unreachable("No way ahead");
+		}
+				
+	}
+	if (CalleeInfo.getCalleeDecl() !=NULL)
+		if (CalleeInfo.getCalleeDecl() != NULL && dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl())) {
+			call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
+			return call_mds;
+		}
+		
 	
+	if (CalleeInfo.getCalleeDecl() == NULL || dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
+		
+		const DeclaratorDecl *func_decl = NULL;
+		if (CalleeInfo.getCalleeDecl())
+			func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
+		const FunctionProtoType *func_proto_type = CalleeInfo.getCalleeFunctionProtoType();
 
-	if (dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()))
-		call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
-	else if (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()) /*&& (dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl()))->isFunctionOrMethodVarDecl()*/) {
-		const DeclaratorDecl *func_decl = dyn_cast<DeclaratorDecl>(CalleeInfo.getCalleeDecl());
+		if (func_proto_type == NULL) {
+			QualType func_ptr_type = func_decl->getType();
+			assert(func_ptr_type->isPointerType() && "Dont know what type of call this is!");
+			const Type *func_type = func_ptr_type->getPointeeType().getTypePtr();
+			while (dyn_cast<ParenType>(func_type)) {
+				func_type = dyn_cast<ParenType>(func_type)->getInnerType().getTypePtr();
+			}
+			while (dyn_cast<TypedefType>(func_type)) {
+				func_type = dyn_cast<TypedefType>(func_type)->desugar().getTypePtr();
+			}
+			
+			
+			if (const FunctionNoProtoType *func_no_proto_type = dyn_cast<FunctionNoProtoType>(func_type)) {
+				std::vector<QualType> arg_types;
+				return getMetaDataForTypeVector(arg_types, func_no_proto_type->getReturnType(), CallInfo, Callee->getContext());
+			}
+			func_proto_type = dyn_cast<FunctionProtoType>(func_type);
+
+		}
 		/*
-		QualType func_ptr_type = func_decl->getType();
-		assert(func_ptr_type->isPointerType() && "Dont know what type of call this is!");
-		const Type *func_type = func_ptr_type->getPointeeType().getTypePtr();
-		while (dyn_cast<ParenType>(func_type)) {
-			func_type = dyn_cast<ParenType>(func_type)->getInnerType().getTypePtr();
-		}
-		while (dyn_cast<TypedefType>(func_type)) {
-			func_type = dyn_cast<TypedefType>(func_type)->desugar().getTypePtr();
-		}
 		//const FunctionProtoType *func_proto_type = dyn_cast<FunctionProtoType>(func_type);
 		*/
-		const FunctionProtoType *func_proto_type = CalleeInfo.getCalleeFunctionProtoType();
+		
+		
+
 		if (func_proto_type == NULL)
 			func_decl->dump();
 		assert(func_proto_type);
+
+
 		QualType return_type = func_proto_type->getReturnType();
 		std::vector<QualType> arg_types;
 		for (FunctionProtoType::param_type_iterator param_type = func_proto_type->param_type_begin(); param_type != func_proto_type->param_type_end(); param_type++) {
@@ -3539,10 +3572,13 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 		call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
 	}
 	else {
+
 		CalleeInfo.getCalleeDecl()->dump();
 		llvm_unreachable("Dont know what type of call this is!");
 	}
 	return call_mds;
+
+
 }
 
 RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,

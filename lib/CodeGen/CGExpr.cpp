@@ -3748,8 +3748,10 @@ RValue CodeGenFunction::EmitCallExpr(const CallExpr *E,
 
   const Decl *TargetDecl = E->getCalleeDecl();
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl)) {
-    if (unsigned builtinID = FD->getBuiltinID())
-      return EmitBuiltinExpr(FD, builtinID, E, ReturnValue);
+	  if (unsigned builtinID = FD->getBuiltinID()) {
+		  return EmitBuiltinExpr(FD, builtinID, E, ReturnValue);
+	}
+      
   }
 
  
@@ -3811,6 +3813,8 @@ RValue CodeGenFunction::EmitCallExpr(const CallExpr *E,
   }
 
   llvm::Value *Callee = EmitScalarExpr(E->getCallee());
+//  llvm::errs() << "Emitting function for "  << "\n";
+//  E->getCallee()->dump();
   return EmitCall(E->getCallee()->getType(), Callee, E, ReturnValue,
                   TargetDecl);
 }
