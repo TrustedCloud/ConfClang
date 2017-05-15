@@ -1251,7 +1251,7 @@ void CodeGenModule::EmitModuleLinkOptions() {
                             llvm::MDNode::get(getLLVMContext(),
                                               LinkerOptionsMetadata));
 }
-
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 void CodeGenModule::EmitDeferred() {
   // Emit code for any potentially referenced deferred decls.  Since a
   // previously unused static decl may become used during the generation of code
@@ -1306,6 +1306,22 @@ void CodeGenModule::EmitDeferred() {
 
     // Otherwise, emit the definition and move on to the next one.
     EmitGlobalDefinition(D, GV);
+
+
+	if (const FunctionDecl *FD = dyn_cast<FunctionDecl> (D.getDecl())) {
+		const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(D);
+		std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
+		llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
+
+		std::vector<llvm::Metadata*> func_md;
+		func_md.push_back(llvm::MDString::get(TheModule.getContext(), FD->getName().str()));
+		func_md.push_back(mds.first);
+		func_md.push_back(mds.second);
+		FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
+	}
+	
+
+
 
     // If we found out that we need to emit more decls, do that recursively.
     // This has the advantage that the decls are emitted in a DFS and related
@@ -1521,7 +1537,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
 
   return ConstantAddress(Aliasee, Alignment);
 }
-std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
+
 void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   const auto *Global = cast<ValueDecl>(GD.getDecl());
 
@@ -1583,6 +1599,8 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
 		if (!FD->doesDeclarationForceExternallyVisibleDefinition()) {
 			//llvm::errs() << FD->getName().str() << "\n";
 			// NOTE : DISABLING GENERATION OF FUNC SGX TYPE. REVERT AND FIX IF BREAKS SOMETHING
+			
+			// Moving this to CodeGenModule.cpp:1255 because all structs are done then.
 			/*
 			const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(GD);
 			std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
@@ -1593,8 +1611,8 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
 			func_md.push_back(mds.first);
 			func_md.push_back(mds.second);
 			FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
-
 			*/
+			
 
 			return;
 		}

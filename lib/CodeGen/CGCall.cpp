@@ -3522,7 +3522,8 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 	}
 	if (CalleeInfo.getCalleeDecl() !=NULL)
 		if (CalleeInfo.getCalleeDecl() != NULL && dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl())) {
-			call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl()), CallInfo, Callee->getContext());
+			
+			call_mds = getMetadataForFunction(dyn_cast<FunctionDecl>(CalleeInfo.getCalleeDecl())->getFirstDecl(), CallInfo, Callee->getContext());
 			return call_mds;
 		}
 		
@@ -3548,7 +3549,12 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 			
 			if (const FunctionNoProtoType *func_no_proto_type = dyn_cast<FunctionNoProtoType>(func_type)) {
 				std::vector<QualType> arg_types;
-				return getMetaDataForTypeVector(arg_types, func_no_proto_type->getReturnType(), CallInfo, Callee->getContext());
+				for (auto arg : CallInfo.arguments()) {
+					arg_types.push_back(arg.type);
+				}
+				
+				call_mds = getMetaDataForTypeVector(arg_types, func_no_proto_type->getReturnType(), CallInfo, Callee->getContext());	
+				return call_mds;
 			}
 			func_proto_type = dyn_cast<FunctionProtoType>(func_type);
 
@@ -3563,6 +3569,8 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 			func_decl->dump();
 		assert(func_proto_type);
 
+		
+		//func_proto_type->dump();
 
 		QualType return_type = func_proto_type->getReturnType();
 		std::vector<QualType> arg_types;

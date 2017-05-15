@@ -694,6 +694,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 	CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
 	for (QualType tyi : args_types) {
 		if (tyi->isStructureType()) {
+			//Ai->info.dump();
 			if (Ai->info.isIndirect()) {
 				std::vector<llvm::Metadata*> md_array;
 				md_array.push_back(md_public);
@@ -721,6 +722,25 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 					arg_metadata.push_back(md_node);
 				}
 			}
+			else if (Ai->info.isCoerceAndExpand()) {
+				
+				bool struct_type = isSgxPrivate(tyi);
+				int total_coerced_args = Ai->info.getCoerceAndExpandTypeSequence().size();
+				std::vector<llvm::Metadata*> md_array;
+				md_array.push_back(struct_type ? md_private : md_public);
+				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+				for (int i = 0; i < total_coerced_args; i++) {
+					arg_metadata.push_back(md_node);
+				}
+			}
+			else if (Ai->info.isDirect()) {
+				bool struct_type = isSgxPrivate(tyi);
+				std::vector<llvm::Metadata*> md_array;
+				md_array.push_back(struct_type ? md_private : md_public);
+				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+				arg_metadata.push_back(md_node);
+			}
+
 		}
 		else {
 			std::vector<llvm::Metadata*> md_array;
@@ -741,6 +761,8 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context) {
 	std::vector<QualType> args_types;
+	if (FD->getFirstDecl()->getNumParams() == FD->getNumParams())
+		FD = FD->getFirstDecl();
 	for (FunctionDecl::param_const_iterator p = FD->param_begin(); p != FD->param_end(); p++) {
 		args_types.push_back((*p)->getType());
 	}
@@ -750,6 +772,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDec
 
 void addMetaDataToFunctionDeclaration(const Decl *D, llvm::Function *Fn, const CGFunctionInfo &FnInfo) {
 	if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
+		
 		std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FnInfo, Fn->getContext());
 		Fn->setMetadata("sgx_type", mds.first);
 		Fn->setMetadata("sgx_return_type",mds.second);

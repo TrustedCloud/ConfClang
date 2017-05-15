@@ -814,6 +814,9 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
   llvm::NamedMDNode *StructMetadata = TheModule.getOrInsertNamedMetadata("struct_sgx_type");
   std::vector<llvm::Metadata*> struct_md;
   unsigned last_index = -1;
+
+  std::vector<llvm::Metadata*> padding_md_vec;
+  llvm::MDNode *padding_md = llvm::MDNode::get(TheModule.getContext(), padding_md_vec);
   for (RecordDecl::field_iterator Fi = D->field_begin(); Fi != D->field_end(); Fi++) {
 	  FieldDecl *F = *Fi;
 	  QualType ty = F->getType();
@@ -821,6 +824,9 @@ CGRecordLayout *CodeGenTypes::ComputeRecordLayout(const RecordDecl *D,
 	  unsigned FieldNo = RL->getLLVMFieldNo(F);
 	  if (FieldNo == last_index) {
 		  continue;
+	  }
+	  if ((last_index + 1) != FieldNo) {
+		  struct_md.push_back(padding_md);
 	  }
 	  last_index = FieldNo;
 	  if (ty->isPointerType()) {
