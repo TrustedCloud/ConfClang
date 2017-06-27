@@ -144,11 +144,11 @@ namespace {
       HandlingTopLevelDeclRAII HandlingDecl(*this);
 
       // Make sure to emit all elements of a Decl.
-	  for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I) {
-		  Builder->EmitTopLevelDecl(*I);
-	  }
-	  
-	  return true;
+      for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I) {
+        Builder->EmitTopLevelDecl(*I);
+      }
+
+      return true;
     }
 
     void EmitDeferredDecls() {

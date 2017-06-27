@@ -369,8 +369,28 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
                                                       << Mismatched;
 }
 
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 void CodeGenModule::Release() {
   EmitDeferred();
+  TranslationUnitDecl *TD =  Context.getTranslationUnitDecl();
+  TranslationUnitDecl::decl_iterator decl_iter = TD->decls_begin();
+  int i = 0;
+  int j = 0;
+  for( ;decl_iter!=TD->decls_end(); decl_iter++){
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(*decl_iter)) {
+      // TODO: For C++ we need to handle constructors/destructors.
+      // Call arrangeGlobalDeclarations
+      const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
+      std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
+      llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
+      std::vector<llvm::Metadata*> func_md;
+      func_md.push_back(llvm::MDString::get(TheModule.getContext(), FD->getName().str()));
+      func_md.push_back(mds.first);
+      func_md.push_back(mds.second);
+      FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
+	  }
+  }
+
   applyGlobalValReplacements();
   applyReplacements();
   checkAliases();
@@ -1306,22 +1326,6 @@ void CodeGenModule::EmitDeferred() {
 
     // Otherwise, emit the definition and move on to the next one.
     EmitGlobalDefinition(D, GV);
-
-
-	if (const FunctionDecl *FD = dyn_cast<FunctionDecl> (D.getDecl())) {
-		const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(D);
-		std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
-		llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
-
-		std::vector<llvm::Metadata*> func_md;
-		func_md.push_back(llvm::MDString::get(TheModule.getContext(), FD->getName().str()));
-		func_md.push_back(mds.first);
-		func_md.push_back(mds.second);
-		FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
-	}
-	
-
-
 
     // If we found out that we need to emit more decls, do that recursively.
     // This has the advantage that the decls are emitted in a DFS and related
