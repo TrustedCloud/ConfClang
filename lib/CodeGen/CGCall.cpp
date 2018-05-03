@@ -886,7 +886,10 @@ getTypeExpansion(QualType Ty, const ASTContext &Context) {
   return llvm::make_unique<NoExpansion>();
 }
 
-static int getExpansionSize(QualType Ty, const ASTContext &Context) {
+//static 
+//Removed Static to be called from CodeGenFunction
+
+int getExpansionSize(QualType Ty, const ASTContext &Context) {
   auto Exp = getTypeExpansion(Ty, Context);
   if (auto CAExp = dyn_cast<ConstantArrayExpansion>(Exp.get())) {
     return CAExp->NumElts * getExpansionSize(CAExp->EltTy, Context);
@@ -1378,6 +1381,7 @@ void ClangToLLVMArgMapping::construct(const ASTContext &Context,
       llvm::StructType *STy = dyn_cast<llvm::StructType>(AI.getCoerceToType());
       if (AI.isDirect() && AI.getCanBeFlattened() && STy) {
         IRArgs.NumberOfArgs = STy->getNumElements();
+	//llvm::errs() << "Number of arguments is " << IRArgs.NumberOfArgs << "\n";
       } else {
         IRArgs.NumberOfArgs = 1;
       }
@@ -3504,13 +3508,13 @@ void CodeGenFunction::deferPlaceholderReplacement(llvm::Instruction *Old,
   DeferredReplacements.push_back(std::make_pair(Old, New));
 }
 
-std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context, const ASTContext &Context);
 std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDecl *FD, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context);
 
 
 
 
-std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo, CGCalleeInfo CalleeInfo, llvm::Value* Callee ) {
+std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo, CGCalleeInfo CalleeInfo, llvm::Value* Callee, const ASTContext &Context) {
 	std::pair<llvm::MDNode*, llvm::MDNode*> call_mds;
 
 	if (CalleeInfo.getCalleeDecl() == NULL) {
@@ -3553,7 +3557,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 					arg_types.push_back(arg.type);
 				}
 				
-				call_mds = getMetaDataForTypeVector(arg_types, func_no_proto_type->getReturnType(), CallInfo, Callee->getContext());	
+				call_mds = getMetaDataForTypeVector(arg_types, func_no_proto_type->getReturnType(), CallInfo, Callee->getContext(), Context);	
 				return call_mds;
 			}
 			func_proto_type = dyn_cast<FunctionProtoType>(func_type);
@@ -3577,7 +3581,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getCallMD(const CGFunctionInfo &CallInfo
 		for (FunctionProtoType::param_type_iterator param_type = func_proto_type->param_type_begin(); param_type != func_proto_type->param_type_end(); param_type++) {
 			arg_types.push_back(*param_type);
 		}
-		call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext());
+		call_mds = getMetaDataForTypeVector(arg_types, return_type, CallInfo, Callee->getContext(), Context);
 	}
 	else {
 
@@ -4066,7 +4070,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   
 
   llvm::Instruction *CI = CS.getInstruction();
-  std::pair<llvm::MDNode*, llvm::MDNode*> call_mds = getCallMD(CallInfo, CalleeInfo, Callee);
+  std::pair<llvm::MDNode*, llvm::MDNode*> call_mds = getCallMD(CallInfo, CalleeInfo, Callee, getContext());
   CI->setMetadata("sgx_call_type", call_mds.first);
   CI->setMetadata("sgx_call_return_type", call_mds.second);
 

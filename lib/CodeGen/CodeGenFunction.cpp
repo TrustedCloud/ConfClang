@@ -664,7 +664,9 @@ bool isSgxPrivate(QualType ty) {
 	return false;
 }
 
-std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context) {
+int getExpansionSize(QualType Ty, const ASTContext &Context);
+
+std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<QualType> args_types, QualType return_type, const CGFunctionInfo &FnInfo, llvm::LLVMContext &context, const ASTContext &Context) {
 	llvm::Metadata* md_public = llvm::MDString::get(context, "public");
 	llvm::Metadata* md_private = llvm::MDString::get(context, "private");
 	std::vector<llvm::Metadata*> arg_metadata;
@@ -694,6 +696,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 	CGFunctionInfo::const_arg_iterator Ai = FnInfo.arg_begin();
 	for (QualType tyi : args_types) {
 		if (tyi->isStructureType()) {
+
 			//Ai->info.dump();
 			if (Ai->info.isIndirect()) {
 				std::vector<llvm::Metadata*> md_array;
@@ -703,7 +706,65 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
 				arg_metadata.push_back(md_node);
 			}
-			else if (Ai->info.isExpand()) {
+			else if (Ai->info.isExpand()){
+				bool struct_type = isSgxPrivate(tyi);
+				int total_expanded_args = getExpansionSize(tyi, Context);
+				std::vector<llvm::Metadata*> md_array;
+				md_array.push_back(struct_type ? md_private : md_public);
+				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+				for (int i = 0; i < total_expanded_args; i++) {
+					arg_metadata.push_back(md_node);
+				}
+				
+			}
+			else if (Ai->info.isExtend() || Ai->info.isDirect()){
+				llvm::StructType *STy = dyn_cast<llvm::StructType>(Ai->info.getCoerceToType());
+				if(Ai->info.isDirect() && Ai->info.getCanBeFlattened() && STy) {
+					bool struct_type = isSgxPrivate(tyi);
+					//int total_flattened_args = getExpansionSize(tyi, Context);
+					int total_flattened_args = STy->getNumElements();
+					std::vector<llvm::Metadata*> md_array;
+					md_array.push_back(struct_type ? md_private : md_public);
+					llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+
+
+					//llvm::errs() << "Total flattened args = " << total_flattened_args << "\n";
+					for (int i = 0; i < total_flattened_args; i++) {
+						arg_metadata.push_back(md_node);
+					}
+					
+
+
+					/*
+					RecordDecl *RD = tyi->getAsStructureType()->getDecl();
+					for (RecordDecl::field_iterator Fi = RD->field_begin(); Fi != RD->field_end(); Fi++) {
+						std::vector<llvm::Metadata*> md_array;
+						md_array.push_back(struct_type ? md_private : md_public);
+						QualType ty = (*Fi)->getType();
+						if (ty->isPointerType()) {
+							ty = ty->getPointeeType();
+							while (ty->isPointerType()) {
+								md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+								ty = ty->getPointeeType();
+							}
+							md_array.push_back(isSgxPrivate(ty) ? md_private : md_public);
+						}
+						llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+						arg_metadata.push_back(md_node);
+					}
+					*/
+					
+				}else{
+					bool struct_type = isSgxPrivate(tyi);
+					std::vector<llvm::Metadata*> md_array;
+					md_array.push_back(struct_type ? md_private : md_public);
+					llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
+					arg_metadata.push_back(md_node);
+						
+				}
+			}
+			/*
+			else if (Ai->info.isExpand() || Ai->info.isDirect() && Ai->info.getCanBeFlattened()) {
 				bool struct_type = isSgxPrivate(tyi);
 				RecordDecl *RD = tyi->getAsStructureType()->getDecl();
 				for (RecordDecl::field_iterator Fi = RD->field_begin(); Fi != RD->field_end(); Fi++) {
@@ -739,6 +800,9 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetaDataForTypeVector(std::vector<Qua
 				md_array.push_back(struct_type ? md_private : md_public);
 				llvm::MDNode *md_node = llvm::MDNode::get(context, ArrayRef<llvm::Metadata*>(md_array));
 				arg_metadata.push_back(md_node);
+			}*/
+			else{
+				llvm::errs() << "Cant figure out type for this argument\n";
 			}
 
 		}
@@ -766,7 +830,7 @@ std::pair<llvm::MDNode*, llvm::MDNode*> getMetadataForFunction(const FunctionDec
 	for (FunctionDecl::param_const_iterator p = FD->param_begin(); p != FD->param_end(); p++) {
 		args_types.push_back((*p)->getType());
 	}
-	return getMetaDataForTypeVector(args_types, FD->getReturnType(), FnInfo, context);
+	return getMetaDataForTypeVector(args_types, FD->getReturnType(), FnInfo, context, FD->getASTContext());
 }
 
 

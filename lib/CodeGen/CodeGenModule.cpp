@@ -384,7 +384,7 @@ void CodeGenModule::Release() {
       std::pair<llvm::MDNode*, llvm::MDNode*> mds = getMetadataForFunction(FD, FI, TheModule.getContext());
       llvm::NamedMDNode *FuncMetadata = TheModule.getOrInsertNamedMetadata("func_sgx_type");
       std::vector<llvm::Metadata*> func_md;
-      func_md.push_back(llvm::MDString::get(TheModule.getContext(), FD->getName().str()));
+      func_md.push_back(llvm::MDString::get(TheModule.getContext(), getMangledName(FD)));
       func_md.push_back(mds.first);
       func_md.push_back(mds.second);
       FuncMetadata->addOperand(llvm::MDNode::get(TheModule.getContext(), func_md));
